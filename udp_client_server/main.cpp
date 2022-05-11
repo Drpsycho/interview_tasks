@@ -1,9 +1,9 @@
 /*
     Simple udp server
 */
-#include<stdio.h>	//printf
-#include<string.h> //memset
-#include<stdlib.h> //exit(0);
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
 #include<arpa/inet.h>
 #include<sys/socket.h>
 #include <unistd.h>
@@ -14,6 +14,9 @@
 #include <vector>
 #include <memory_pull.hpp>
 #include <thread>
+#include <map>
+#include <unordered_map>
+#include <fstream>
 
 constexpr auto BUFLEN = 512;	//Max length of buffer
 constexpr auto PORT = 9889;	//The port on which to listen for incoming data
@@ -48,10 +51,6 @@ uint32_t crc32c(uint32_t crc, const unsigned char *buf, size_t len)
     }
     return ~crc;
 }
-
-#include <map>
-#include <unordered_map>
-#include <fstream>
 
 class server_udp{
     int sock_descriptor;
@@ -140,10 +139,6 @@ class server_udp{
                         std::cout << "Can't send to: " << "\n";
                     }
                     std::cout << "crc is " << std::hex << crc << "\n";
-                    
-                // } else {
-                //     std::cout << "smthing went wrong!\n";
-                // }
             
             }
             _mempool.free(buf.first);
