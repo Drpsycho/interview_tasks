@@ -17,7 +17,6 @@
 #include <memory_pull.hpp>
 
 constexpr auto BUFLEN = 512;	//Max length of buffer
-constexpr auto PORT = 9889;	//The port on which to listen for incoming data
 constexpr auto max_size_udp_packet = 1472; //byte
 constexpr auto payload_size = max_size_udp_packet-(4+4+1+8);
 
@@ -28,10 +27,10 @@ enum packet_type{
 
 #pragma pack(push, 1)
 struct udp_packet{
-    uint32_t seq_number;                            // номер пакета
-    uint32_t seq_total;                             // количество пакетов с данными
-    uint8_t  type;                                  // тип пакета: 0 == ACK, 1 == PUT
-    uint8_t  id[8];                                 // 8 байт - идентификатор, отличающий один файл от другого
+    uint32_t seq_number;           // номер пакета
+    uint32_t seq_total;            // количество пакетов с данными
+    uint8_t  type;                 // тип пакета: 0 == ACK, 1 == PUT
+    uint8_t  id[8];                // 8 байт - идентификатор, отличающий один файл от другого
     uint8_t  data[payload_size];   // после заголовка и до конца UDP пакета идут данные
 };
 #pragma pack(pop)
@@ -62,16 +61,15 @@ class server_udp{
     std::unordered_map<uint64_t, std::map<uint32_t, std::vector<uint8_t>> > temporary_storage;
 
     public:
-    server_udp(): _mempool(){
+    server_udp(uint32_t port_number): _mempool(){
 
         if( (sock_descriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1){
             std::cout << "socket descriptor  = " << sock_descriptor << " errno = "<< strerror(errno)<< "\n"; 
             throw std::runtime_error("can't create socket!"); 
         }
-        std::cout << "socket descriptor = " << sock_descriptor << "\n";
-        
+
         sock_addres.sin_family = AF_INET;
-        sock_addres.sin_port = htons(PORT);
+        sock_addres.sin_port = htons(port_number);
         sock_addres.sin_addr.s_addr = htonl(INADDR_ANY);
 
         if( auto result = bind(sock_descriptor , (struct sockaddr*)&sock_addres, sizeof(sock_addres)); result == -1){
@@ -110,7 +108,7 @@ class server_udp{
         }
     }
 
-    uint32_t get_crc(const uint64_t id, const udp_packet& _udp_packet){
+    uint32_t get_crc(const uint64_t& id, const udp_packet& _udp_packet){
         uint32_t crc = 0;
         if( temporary_storage.at(id).size() == _udp_packet.seq_total){
             // std::ofstream fs("example.txt", std::ios::out | std::ios::binary | std::ios::app);
@@ -127,6 +125,9 @@ class server_udp{
         return crc;
     }
 
+    uint32_t get_count_of_received_packages(const uint64_t& id) const{
+        return temporary_storage.at(id).size();
+    }
 
     void handler(){
         for(;;){
@@ -145,8 +146,9 @@ class server_udp{
                 uint64_t id = get_id(_udp_packet);
                 add_data_to_storage(id, _udp_packet);
                 uint32_t crc = get_crc(id, _udp_packet);
-                
+
                 _udp_packet.type = ACK;
+                _udp_packet.seq_total = get_count_of_received_packages(id);
                 memcpy(&_udp_packet.data, &crc, sizeof(crc));
             
                 if (sendto(sock_descriptor, &_udp_packet, (4+4+1+8+4), 0, &back_adress, sizeof(sockaddr)) == -1){
