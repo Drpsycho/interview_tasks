@@ -43,7 +43,6 @@ def client(filepath):
         chunk_number = temp_chunk[1]
         crc = 0
         crc = crc32c.crc32c(chunk_data, crc)
-        print('crc32 client = {:#010x}'.format(crc))
 
         data = struct.pack(f'<llB8s{len(chunk_data)}s', chunk_number, total_packet, 1, (1).to_bytes(8,byteorder='big'), chunk_data)
 
@@ -52,18 +51,18 @@ def client(filepath):
         # print("\n\n 1. Client Sent : ", send_data, "\n\n")
         data, address = s.recvfrom(4096)
         # 4+4+1+8+4
-        seq_number, seq_number, type, id, crc_from_server = list(struct.unpack('<llB8s4s', data))
+        seq_number, seq_total, type, id, crc_from_server = list(struct.unpack('<llB8s4s', data))
         crc_from_server = int.from_bytes(crc_from_server,"little")
-        print('crc32 from server = {:#010x}'.format(crc_from_server))
-        print(f"sent {already_sent} from {total_packet}")
-        if crc_from_server != crc:
-            print('crc32 whole file = {:#010x}'.format(crc_whole_file))
-            print('crc32 from server = {:#010x}'.format(crc_from_server))
+        if(seq_total != total_packet):
             print('crc32 from client = {:#010x}'.format(crc))
-            exit(0)
-        # print("\n\n 2. Client received : ", data.decode('utf-8'), "\n\n")
-    print("done")
-    print("crc of the file\nfrom client: "+str(crc_whole_file)+"\nfrom server: " +str(crc)+"\n")
+            print('crc32 from server = {:#010x}'.format(crc_from_server))
+            print(f"\nsent {seq_total} from {total_packet}\npacket number is {chunk_number}")
+        else:
+            print("The checksum of the entire file is")
+            print('crc32 from client = {:#010x}'.format(crc_whole_file))
+            print('crc32 from server = {:#010x}'.format(crc_from_server))
+            print("done")
+
     s.close()
 
 if __name__ == "__main__":

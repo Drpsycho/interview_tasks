@@ -93,38 +93,39 @@ class server_udp{
         //need to check for the garbrage or wrong data in packet
         if(buf.first->byte_used <= sizeof(udp_packet)){
             auto payload_size = buf.first->byte_used - sizeof(uint8_t)*(4+4+1+8);
-            std::cout << "byte used: " << buf.first->byte_used << "\n";
+            // std::cout << "byte used: " << buf.first->byte_used << "\n";
             memcpy(&_udp_packet, buf.first->pointer(), buf.first->byte_used);
             return UNPACKED_SUCCESSFULLY;
         }
         return BAD_UDP_PACKAGE;
     }
 
-    void add_data_to_storage(const uint64_t& id, const udp_packet& _udp_packet){
+    void add_data_to_storage(const uint64_t& id, const udp_packet& _udp_packet, const uint32_t& packet_lenth){
         if(temporary_storage.find(id) == temporary_storage.end()){
-            temporary_storage[id] = {{_udp_packet.seq_number, {_udp_packet.data, _udp_packet.data+payload_size}}};
+            temporary_storage[id] = {{_udp_packet.seq_number, {_udp_packet.data, _udp_packet.data+packet_lenth}}};
         }else{
-            temporary_storage.at(id)[_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+payload_size};
+            temporary_storage.at(id)[_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+packet_lenth};
         }
     }
 
-    uint32_t get_crc(const uint64_t& id, const udp_packet& _udp_packet){
+    uint32_t get_crc(const uint64_t& id, const udp_packet& _udp_packet, const uint32_t& packet_lenth){
         uint32_t crc = 0;
         if( temporary_storage.at(id).size() == _udp_packet.seq_total){
-            // std::ofstream fs("example.txt", std::ios::out | std::ios::binary | std::ios::app);
-
+            // std::ofstream fs("example.pdf", std::ios::out | std::ios::binary | std::ios::app);
             for(auto it : temporary_storage.at(id)){
                 crc = crc32c(crc, it.second.data(), it.second.size());
                 // fs.write((char *)it.second.data(), it.second.size());
             }
             // fs.close();
-            temporary_storage.at(id).clear();
+
         } else {
-            crc = crc32c(crc, _udp_packet.data, payload_size);
+            crc = crc32c(crc, _udp_packet.data, packet_lenth);
         }
         return crc;
     }
-
+    void clear_storage(const uint64_t& id){
+        temporary_storage.at(id).clear();
+    }
     uint32_t get_count_of_received_packages(const uint64_t& id) const{
         return temporary_storage.at(id).size();
     }
@@ -141,14 +142,19 @@ class server_udp{
             if(unpack(buf,_udp_packet) == UNPACKED_SUCCESSFULLY)
             {
                 auto back_adress = buf.second;
+                auto packet_lenth = buf.first->byte_used - sizeof(uint8_t)*(4+4+1+8);
                 _mempool.free(buf.first);
 
                 uint64_t id = get_id(_udp_packet);
-                add_data_to_storage(id, _udp_packet);
-                uint32_t crc = get_crc(id, _udp_packet);
+                add_data_to_storage(id, _udp_packet, packet_lenth);
+                uint32_t crc = get_crc(id, _udp_packet, packet_lenth);
 
                 _udp_packet.type = ACK;
-                _udp_packet.seq_total = get_count_of_received_packages(id);
+                auto number_of_packages = get_count_of_received_packages(id);
+                if (_udp_packet.seq_total == number_of_packages){
+                    clear_storage(id);
+                }
+                _udp_packet.seq_total = number_of_packages;
                 memcpy(&_udp_packet.data, &crc, sizeof(crc));
             
                 if (sendto(sock_descriptor, &_udp_packet, (4+4+1+8+4), 0, &back_adress, sizeof(sockaddr)) == -1){
