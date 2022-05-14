@@ -14,12 +14,9 @@ IP = "127.0.0.1"
 def randomID():
     return (randint(1, 99999999)).to_bytes(8,byteorder='big')
 
-def client(filepath):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
-    chunks=[]
-    filename = filepath
+def readfile_and_get_checksum(filename):
     chunksize = 1455
-
+    chunks=[]
     crc_whole_file = 0
     with open(filename, "rb") as f:
         chunk_number = 0
@@ -31,7 +28,11 @@ def client(filepath):
                 chunk_number += 1
             else:
                 break  
+    return chunks, crc_whole_file
 
+def client(path_to_file):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)    
+    chunks, crc_whole_file = readfile_and_get_checksum(path_to_file)
     random.shuffle(chunks)
     total_packet = len(chunks)
     
@@ -52,15 +53,13 @@ def client(filepath):
         seq_number, seq_total, type, id, crc_from_server = list(struct.unpack('<llB8s4s', data))
         crc_from_server = int.from_bytes(crc_from_server,"little")
         if(seq_total != total_packet):
-            pass
             print('crc32 from client = {:#010x}'.format(crc))
             print('crc32 from server = {:#010x}'.format(crc_from_server))
             print(f"\nsent {seq_total} from {total_packet}\npacket number is {chunk_number}")
         else:
-            print("The checksum of the entire file is")
+            print(f"\nDone, sent {seq_total} packets!\nThe checksum of the entire file is")
             print('crc32 from client = {:#010x}'.format(crc_whole_file))
             print('crc32 from server = {:#010x}'.format(crc_from_server))
-            print("done")
 
     s.close()
 
