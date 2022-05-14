@@ -1,24 +1,21 @@
 #pragma once
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
+#include <cstring>
 #include <stdexcept>
 #include <iostream>
 #include <array>
 #include <vector>
 #include <map>
 #include <unordered_map>
-#include <fstream>
 #include <memory_pool.hpp>
 
 constexpr auto BUFLEN = 512;	//Max length of buffer
 constexpr auto max_size_udp_packet = 1472; //byte
-constexpr auto payload_size = max_size_udp_packet-(4+4+1+8);
+constexpr auto header_size = (4+4+1+8);
+constexpr auto payload_size = max_size_udp_packet-header_size;
 
 enum packet_type{
     ACK = 0,
@@ -92,8 +89,7 @@ class server_udp{
     error_code unpack(const memory_pool::buf_with_addr_t& buf, udp_packet& _udp_packet){
         //need to check for the garbrage or wrong data in packet
         if(buf.first->byte_used <= sizeof(udp_packet)){
-            auto payload_size = buf.first->byte_used - sizeof(uint8_t)*(4+4+1+8);
-            // std::cout << "byte used: " << buf.first->byte_used << "\n";
+            auto payload_size = buf.first->byte_used - sizeof(uint8_t) * header_size;
             memcpy(&_udp_packet, buf.first->pointer(), buf.first->byte_used);
             return UNPACKED_SUCCESSFULLY;
         }
@@ -104,28 +100,27 @@ class server_udp{
         if(temporary_storage.find(id) == temporary_storage.end()){
             temporary_storage[id] = {{_udp_packet.seq_number, {_udp_packet.data, _udp_packet.data+packet_lenth}}};
         }else{
-            temporary_storage.at(id)[_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+packet_lenth};
+            if(temporary_storage.at(id)[_udp_packet.seq_number].empty())
+                temporary_storage.at(id)[_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+packet_lenth};
         }
     }
 
     uint32_t get_crc(const uint64_t& id, const udp_packet& _udp_packet, const uint32_t& packet_lenth){
         uint32_t crc = 0;
         if( temporary_storage.at(id).size() == _udp_packet.seq_total){
-            // std::ofstream fs("example.pdf", std::ios::out | std::ios::binary | std::ios::app);
             for(auto it : temporary_storage.at(id)){
                 crc = crc32c(crc, it.second.data(), it.second.size());
-                // fs.write((char *)it.second.data(), it.second.size());
             }
-            // fs.close();
-
         } else {
             crc = crc32c(crc, _udp_packet.data, packet_lenth);
         }
         return crc;
     }
+
     void clear_storage(const uint64_t& id){
         temporary_storage.at(id).clear();
     }
+
     uint32_t get_count_of_received_packages(const uint64_t& id) const{
         return temporary_storage.at(id).size();
     }
@@ -142,7 +137,7 @@ class server_udp{
             if(unpack(buf,_udp_packet) == UNPACKED_SUCCESSFULLY)
             {
                 auto back_adress = buf.second;
-                auto packet_lenth = buf.first->byte_used - sizeof(uint8_t)*(4+4+1+8);
+                auto packet_lenth = buf.first->byte_used - sizeof(uint8_t) * header_size;
                 _mempool.free(buf.first);
 
                 uint64_t id = get_id(_udp_packet);
@@ -157,10 +152,9 @@ class server_udp{
                 _udp_packet.seq_total = number_of_packages;
                 memcpy(&_udp_packet.data, &crc, sizeof(crc));
             
-                if (sendto(sock_descriptor, &_udp_packet, (4+4+1+8+4), 0, &back_adress, sizeof(sockaddr)) == -1){
+                if (sendto(sock_descriptor, &_udp_packet, header_size + sizeof(uint32_t), 0, &back_adress, sizeof(sockaddr)) == -1){
                     std::cout << "Can't send to: " << "\n";
                 }
-                // std::cout << "crc is " << std::hex << crc << "\n";
             } else{
                 _mempool.free(buf.first);
             }
@@ -176,6 +170,7 @@ class server_udp{
             auto buf = _mempool.get();
             if(!buf){
                 std::cout << "error! memory pull is empty\n";
+                continue;
             }
 
             //handling big message

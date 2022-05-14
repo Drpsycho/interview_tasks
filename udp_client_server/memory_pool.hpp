@@ -57,7 +57,7 @@ struct memory_pool {
 
     void free(buf* _buf) {
         for (auto it = pool.begin(); it != pool.end(); ++it){
-            if ((it->first == buffer_used || it->first == buffer_populated) && &(it->second) == _buf) {
+            if ((it->first == buffer_used || it->first == buffer_populated) && (&(it->second) == _buf)) {
                 it->first = buffer_free;
             }
         }
