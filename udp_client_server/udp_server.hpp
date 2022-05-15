@@ -97,12 +97,7 @@ class server_udp{
     }
 
     void add_data_to_storage(const uint64_t& id, const udp_packet& _udp_packet, const uint32_t& packet_lenth){
-        if(temporary_storage.find(id) == temporary_storage.end()){
-            temporary_storage[id] = {{_udp_packet.seq_number, {_udp_packet.data, _udp_packet.data+packet_lenth}}};
-        }else{
-            if(temporary_storage.at(id)[_udp_packet.seq_number].empty())
-                temporary_storage.at(id)[_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+packet_lenth};
-        }
+        temporary_storage[id][_udp_packet.seq_number] = {_udp_packet.data, _udp_packet.data+packet_lenth};
     }
 
     uint32_t get_crc(const uint64_t& id, const udp_packet& _udp_packet, const uint32_t& packet_lenth){
