@@ -75,7 +75,7 @@ class server_udp{
         }
     }
 
-    uint64_t get_id(const udp_packet& _udp_packet){
+    uint64_t get_id(const udp_packet& _udp_packet) const {
             return (uint64_t)(_udp_packet.id[7]) | 
             (uint64_t)(_udp_packet.id[6]) << 8  |
             (uint64_t)(_udp_packet.id[5]) << 16 |
